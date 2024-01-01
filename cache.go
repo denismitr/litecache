@@ -17,10 +17,11 @@ type Cache[T any] struct {
 	len       atomic.Int64
 }
 
-func New[T any](ctx context.Context) *Cache[T] {
+// New - creates a new cache
+func New[T any](ctx context.Context, shards int) *Cache[T] {
 	c := &Cache[T]{
-		shardMask: uint64(50 - 1),
-		shards:    make([]*shard[T], 50),
+		shardMask: uint64(shards - 1),
+		shards:    make([]*shard[T], shards),
 		hasher:    newDefaultHasher(),
 	}
 
@@ -40,6 +41,8 @@ func (c *Cache[T]) getShard(key string) *shard[T] {
 	return c.shards[hk&c.shardMask]
 }
 
+// Get return value for a key, if it exists and has not expired
+// zero value is returned if the key was not found or has expired
 func (c *Cache[T]) Get(key string) (T, bool) {
 	shard := c.getShard(key)
 	item, found := shard.get(key)
@@ -50,6 +53,8 @@ func (c *Cache[T]) Get(key string) (T, bool) {
 	return item.value, true
 }
 
+// Set - sets key value pair.
+// it will update the value if key already exists in the cache and has not expired.
 func (c *Cache[T]) Set(key string, value T) {
 	shard := c.getShard(key)
 	if shard.set(key, value, NoExpiration) {
@@ -57,7 +62,18 @@ func (c *Cache[T]) Set(key string, value T) {
 	}
 }
 
-func (c *Cache[T]) SetNX(key string, value T) bool {
+// SetTtl - sets key value pair with ttl.
+// it will update the value if key already exists in the cache and has not expired.
+func (c *Cache[T]) SetTtl(key string, value T, ttl time.Duration) {
+	shard := c.getShard(key)
+	if shard.set(key, value, ttl) {
+		c.len.Add(1)
+	}
+}
+
+// SetNx - sets key value pair only if key does not exist in the cache or has expired.
+// if the key value pair was set successfully it returns true
+func (c *Cache[T]) SetNx(key string, value T) bool {
 	shard := c.getShard(key)
 	if shard.setNX(key, value, NoExpiration) {
 		c.len.Add(1)
@@ -67,14 +83,44 @@ func (c *Cache[T]) SetNX(key string, value T) bool {
 	return false
 }
 
-func (c *Cache[T]) SetTTL(key string, value T, ttl time.Duration) {
+// SetNxTtl - sets key value only if key does not exist in the cache or has expired.
+// ttl expected to be given as a last parameter.
+// if the key value pair was set successfully it returns true
+func (c *Cache[T]) SetNxTtl(key string, value T, ttl time.Duration) bool {
 	shard := c.getShard(key)
-	if shard.set(key, value, ttl) {
+	if shard.setNX(key, value, ttl) {
 		c.len.Add(1)
+		return true
 	}
+	return false
 }
 
-func (c *Cache[T]) Len() int {
+// SetEx - updates key value pair if key already exists and not expired in the cache.
+// if value was updated, returns true
+func (c *Cache[T]) SetEx(key string, value T) bool {
+	shard := c.getShard(key)
+	if shard.setEX(key, value, NoExpiration) {
+		c.len.Add(1)
+		return true
+	}
+	return false
+}
+
+// SetExTtl - updates key value pair if key already exists and not expired in the cache.
+// ttl expected to be given as a last parameter.
+// if value was updated, returns true
+func (c *Cache[T]) SetExTtl(key string, value T, ttl time.Duration) bool {
+	shard := c.getShard(key)
+	if shard.setEX(key, value, ttl) {
+		c.len.Add(1)
+		return true
+	}
+	return false
+}
+
+// Count returns the number of in the cache keys.
+// It might get delayed updates when keys expire.
+func (c *Cache[T]) Count() int {
 	return int(c.len.Load())
 }
 

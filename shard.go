@@ -70,6 +70,28 @@ func (s *shard[T]) setNX(key string, value T, ttl time.Duration) bool {
 	return true
 }
 
+func (s *shard[T]) setEX(key string, value T, ttl time.Duration) bool {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	if item, exists := s.items[key]; exists {
+		// if exists and expired return false
+		if item.exp <= 0 || item.exp < time.Now().UnixNano() {
+			return false
+		}
+	} else {
+		return false
+	}
+
+	exp := int64(NoExpiration)
+	if ttl > 0 {
+		exp = time.Now().UnixNano() + ttl.Nanoseconds()
+	}
+
+	s.items[key] = item[T]{value: value, exp: exp}
+	return true
+}
+
 func (s *shard[T]) cleanExpired() int {
 	s.mux.Lock()
 	defer s.mux.Unlock()
