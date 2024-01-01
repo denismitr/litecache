@@ -99,11 +99,7 @@ func (c *Cache[T]) SetNxTtl(key string, value T, ttl time.Duration) bool {
 // if value was updated, returns true
 func (c *Cache[T]) SetEx(key string, value T) bool {
 	shard := c.getShard(key)
-	if shard.setEX(key, value, NoExpiration) {
-		c.len.Add(1)
-		return true
-	}
-	return false
+	return shard.setEX(key, value, NoExpiration)
 }
 
 // SetExTtl - updates key value pair if key already exists and not expired in the cache.

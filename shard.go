@@ -74,12 +74,9 @@ func (s *shard[T]) setEX(key string, value T, ttl time.Duration) bool {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	if item, exists := s.items[key]; exists {
-		// if exists and expired return false
-		if item.exp <= 0 || item.exp < time.Now().UnixNano() {
-			return false
-		}
-	} else {
+	itm, exists := s.items[key]
+	// if exists and expired return false
+	if !exists || (itm.exp > 0 && itm.exp < time.Now().UnixNano()) {
 		return false
 	}
 

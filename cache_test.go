@@ -86,6 +86,54 @@ func TestDefaultCache(t *testing.T) {
 		assert.Equal(t, 1, v2)
 	})
 
+	t.Run("setex single already existing key", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx, 50)
+		c.Set("foo", 1)
+
+		assert.Equal(t, 1, c.Count())
+
+		v, found := c.Get("foo")
+		assert.True(t, found)
+		assert.Equal(t, 1, v)
+
+		assert.True(t, c.SetEx("foo", 3))
+		assert.Equal(t, 1, c.Count())
+
+		//expect value not change
+		v2, found := c.Get("foo")
+		assert.True(t, found)
+		assert.Equal(t, 3, v2)
+	})
+
+	t.Run("setex single non existing key", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx, 50)
+		c.Set("foo", 1)
+
+		assert.Equal(t, 1, c.Count())
+
+		vFoo, foundFoo := c.Get("foo")
+		assert.True(t, foundFoo)
+		assert.Equal(t, 1, vFoo)
+
+		assert.False(t, c.SetEx("bar", 3))
+		assert.Equal(t, 1, c.Count())
+
+		//expect value not change
+		vFoo2, foundFoo := c.Get("foo")
+		assert.True(t, foundFoo)
+		assert.Equal(t, 1, vFoo2)
+
+		vBar, foundBar := c.Get("bar")
+		assert.False(t, foundBar)
+		assert.Equal(t, 0, vBar)
+	})
+
 	t.Run("set ttl and get single key", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
