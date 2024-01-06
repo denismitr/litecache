@@ -37,6 +37,9 @@ func (s *shard[T]) iterate(fn func(k string, v T)) {
 	defer s.mux.RUnlock()
 
 	for k, itm := range s.items {
+		if itm.exp > 0 && time.Now().UnixNano() > itm.exp {
+			continue
+		}
 		fn(k, itm.value)
 	}
 }

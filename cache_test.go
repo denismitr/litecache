@@ -161,6 +161,8 @@ func TestDefaultCache(t *testing.T) {
 }
 
 func TestCache_ForEach(t *testing.T) {
+	t.Parallel()
+
 	t.Run("many keys sync", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -186,6 +188,49 @@ func TestCache_ForEach(t *testing.T) {
 			v, ok := res[fmt.Sprintf("key:%d", i)]
 			assert.True(t, ok)
 			assert.Equal(t, i, v)
+		}
+	})
+
+	t.Run("all expired keys except 2", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		const N = 1_000_000
+
+		c := litecache.New[int](ctx, 75)
+		for i := 1; i <= N; i++ {
+			c.SetNxTtl(fmt.Sprintf("key:%d", i), i, 20*time.Millisecond)
+		}
+
+		time.Sleep(21 * time.Millisecond)
+
+		c.SetNx("key:foo", 100)
+		c.SetNx("key:bar", 200)
+
+		totalFound := 0
+		res := make(map[string]int)
+		c.ForEach(func(k string, v int) {
+			totalFound++
+			res[k] = v
+		})
+		assert.Equal(t, 2, totalFound)
+
+		for i := 1; i <= N; i++ {
+			v, ok := res[fmt.Sprintf("key:%d", i)]
+			assert.False(t, ok)
+			assert.Equal(t, 0, v)
+		}
+
+		{
+			v, found := c.Get("key:foo")
+			assert.True(t, found)
+			assert.Equal(t, 100, v)
+		}
+
+		{
+			v, found := c.Get("key:bar")
+			assert.True(t, found)
+			assert.Equal(t, 200, v)
 		}
 	})
 }
