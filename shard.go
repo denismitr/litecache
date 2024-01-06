@@ -32,6 +32,15 @@ func (s *shard[T]) get(key string) (item[T], bool) {
 	return item, ok
 }
 
+func (s *shard[T]) iterate(fn func(k string, v T)) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+
+	for k, itm := range s.items {
+		fn(k, itm.value)
+	}
+}
+
 func (s *shard[T]) set(key string, value T, ttl time.Duration) bool {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -48,6 +57,21 @@ func (s *shard[T]) set(key string, value T, ttl time.Duration) bool {
 
 	s.items[key] = item[T]{value: value, exp: exp}
 	return added
+}
+
+func (s *shard[T]) transform(key string, effector func(value T) T) bool {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	itm, exists := s.items[key]
+	// if exists and expired return false
+	if !exists || (itm.exp > 0 && itm.exp < time.Now().UnixNano()) {
+		return false
+	}
+
+	modified := effector(itm.value)
+	s.items[key] = item[T]{value: modified, exp: itm.exp}
+	return true
 }
 
 func (s *shard[T]) setNX(key string, value T, ttl time.Duration) bool {

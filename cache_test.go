@@ -159,3 +159,83 @@ func TestDefaultCache(t *testing.T) {
 		assert.Equal(t, 0, v3)
 	})
 }
+
+func TestCache_ForEach(t *testing.T) {
+	t.Run("many keys sync", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		const N = 1_000_000
+
+		c := litecache.New[int](ctx, 75)
+		for i := 1; i <= N; i++ {
+			c.SetNx(fmt.Sprintf("key:%d", i), i)
+		}
+
+		assert.Equal(t, N, c.Count())
+
+		totalFound := 0
+		res := make(map[string]int)
+		c.ForEach(func(k string, v int) {
+			totalFound++
+			res[k] = v
+		})
+		assert.Equal(t, N, totalFound)
+
+		for i := 1; i <= N; i++ {
+			v, ok := res[fmt.Sprintf("key:%d", i)]
+			assert.True(t, ok)
+			assert.Equal(t, i, v)
+		}
+	})
+}
+
+func TestCache_Transform(t *testing.T) {
+	t.Run("transform single value", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx, 50)
+		c.SetTtl("foo", 3, 2*time.Second)
+		assert.Equal(t, 1, c.Count())
+
+		v, found := c.Get("foo")
+		assert.True(t, found)
+		assert.Equal(t, 3, v)
+
+		assert.True(t, c.Transform("foo", func(n int) int {
+			n += 20
+			return n
+		}))
+
+		v2, found := c.Get("foo")
+		assert.True(t, found)
+		assert.Equal(t, 23, v2)
+	})
+
+	t.Run("transform expired value should fail", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx, 50)
+		c.SetTtl("foo", 3, 10*time.Millisecond)
+		assert.Equal(t, 1, c.Count())
+
+		v, found := c.Get("foo")
+		assert.True(t, found)
+		assert.Equal(t, 3, v)
+
+		time.Sleep(30 * time.Millisecond)
+
+		// already expired
+		assert.False(t, c.Transform("foo", func(n int) int {
+			n += 20
+			return n
+		}))
+
+		// already expired
+		v2, found := c.Get("foo")
+		assert.False(t, found)
+		assert.Equal(t, 0, v2)
+	})
+}

@@ -53,6 +53,17 @@ func (c *Cache[T]) Get(key string) (T, bool) {
 	return item.value, true
 }
 
+func (c *Cache[T]) Transform(key string, effector func(value T) T) bool {
+	shard := c.getShard(key)
+	return shard.transform(key, effector)
+}
+
+func (c *Cache[T]) ForEach(fn func(k string, v T)) {
+	for _, s := range c.shards {
+		s.iterate(fn)
+	}
+}
+
 // Set - sets key value pair.
 // it will update the value if key already exists in the cache and has not expired.
 func (c *Cache[T]) Set(key string, value T) {
