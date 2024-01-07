@@ -18,10 +18,23 @@ type Cache[T any] struct {
 }
 
 // New - creates a new cache
-func New[T any](ctx context.Context, shards int) *Cache[T] {
+func New[T any](ctx context.Context) *Cache[T] {
+	cfg := NewDefaultConfig[T]()
+	return newWithConfig[T](ctx, cfg)
+}
+
+func NewWithConfig[T any](ctx context.Context, cfg Config[T]) (*Cache[T], error) {
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	return newWithConfig[T](ctx, cfg), nil
+}
+
+func newWithConfig[T any](ctx context.Context, cfg Config[T]) *Cache[T] {
 	c := &Cache[T]{
-		shardMask: uint64(shards - 1),
-		shards:    make([]*shard[T], shards),
+		shardMask: uint64(cfg.shards - 1),
+		shards:    make([]*shard[T], cfg.shards),
 		hasher:    newDefaultHasher(),
 	}
 

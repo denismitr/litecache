@@ -16,7 +16,7 @@ func TestDefaultCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[string](ctx, 50)
+		c := litecache.New[string](ctx)
 		c.Set("foo", "bar")
 
 		assert.Equal(t, 1, c.Count())
@@ -34,7 +34,7 @@ func TestDefaultCache(t *testing.T) {
 
 		const iterations = 100_000
 
-		c := litecache.New[string](ctx, 50)
+		c := litecache.New[string](ctx)
 		for i := 0; i < iterations; i++ {
 			wg.Add(1)
 			go func(i int) {
@@ -68,7 +68,7 @@ func TestDefaultCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.Set("foo", 1)
 
 		assert.Equal(t, 1, c.Count())
@@ -90,7 +90,7 @@ func TestDefaultCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.Set("foo", 1)
 
 		assert.Equal(t, 1, c.Count())
@@ -112,7 +112,7 @@ func TestDefaultCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.Set("foo", 1)
 
 		assert.Equal(t, 1, c.Count())
@@ -138,7 +138,7 @@ func TestDefaultCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.SetTtl("foo", 10, 2*time.Second)
 		assert.Equal(t, 1, c.Count())
 
@@ -169,7 +169,7 @@ func TestCache_ForEach(t *testing.T) {
 
 		const N = 1_000_000
 
-		c := litecache.New[int](ctx, 75)
+		c := litecache.New[int](ctx)
 		for i := 1; i <= N; i++ {
 			c.SetNx(fmt.Sprintf("key:%d", i), i)
 		}
@@ -197,7 +197,7 @@ func TestCache_ForEach(t *testing.T) {
 
 		const N = 1_000_000
 
-		c := litecache.New[int](ctx, 75)
+		c := litecache.New[int](ctx)
 		for i := 1; i <= N; i++ {
 			c.SetNxTtl(fmt.Sprintf("key:%d", i), i, 20*time.Millisecond)
 		}
@@ -240,7 +240,7 @@ func TestCache_Transform(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.SetTtl("foo", 3, 2*time.Second)
 		assert.Equal(t, 1, c.Count())
 
@@ -262,7 +262,7 @@ func TestCache_Transform(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		c := litecache.New[int](ctx, 50)
+		c := litecache.New[int](ctx)
 		c.SetTtl("foo", 3, 10*time.Millisecond)
 		assert.Equal(t, 1, c.Count())
 
