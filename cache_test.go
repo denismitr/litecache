@@ -233,6 +233,73 @@ func TestCache_ForEach(t *testing.T) {
 			assert.Equal(t, 200, v)
 		}
 	})
+
+	t.Run("race", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		var wg sync.WaitGroup
+
+		const N = 1_000_000
+		c := litecache.New[int](ctx)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for i := 1; i <= N; i++ {
+				c.SetTtl(fmt.Sprintf("key:%d", i), i, 20*time.Millisecond)
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for i := N; i >= 0; i-- {
+				c.SetTtl(fmt.Sprintf("key:%d", i), i, 30*time.Millisecond)
+			}
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		c.SetNx("key:foo", 100)
+		c.SetNx("key:bar", 200)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			totalFound := 0
+			res := make(map[string]int)
+			c.ForEach(func(k string, v int) {
+				totalFound++
+				res[k] = v
+			})
+			assert.GreaterOrEqual(t, totalFound, 2)
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for i := N; i <= N+N; i++ {
+				c.SetNx(fmt.Sprintf("key:%d", i), i)
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			totalFound := 0
+			c.ForEach(func(k string, v int) {
+				totalFound++
+			})
+			assert.GreaterOrEqual(t, totalFound, totalFound)
+		}()
+
+		wg.Wait()
+	})
 }
 
 func TestCache_Transform(t *testing.T) {
