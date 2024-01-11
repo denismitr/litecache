@@ -2,7 +2,9 @@ package litecache_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +33,6 @@ func TestDefaultCache(t *testing.T) {
 		defer cancel()
 
 		var wg sync.WaitGroup
-
 		const iterations = 100_000
 
 		c := litecache.New[string](ctx)
@@ -157,6 +158,73 @@ func TestDefaultCache(t *testing.T) {
 		v3, found := c.Get("foo")
 		assert.False(t, found)
 		assert.Equal(t, 0, v3)
+	})
+}
+
+func TestNewWithConfig(t *testing.T) {
+	t.Run("0 shard number", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg := litecache.NewDefaultConfig[float32]().WithShards(0)
+
+		c, err := litecache.NewWithConfig[float32](ctx, cfg)
+		require.Error(t, err)
+		require.True(t, errors.Is(err, litecache.ErrInvalidConfig))
+		require.Nil(t, c)
+	})
+
+	t.Run("negative shard number", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg := litecache.NewDefaultConfig[float32]().WithShards(-1)
+
+		c, err := litecache.NewWithConfig[float32](ctx, cfg)
+		require.Error(t, err)
+		require.True(t, errors.Is(err, litecache.ErrInvalidConfig))
+		require.Nil(t, c)
+	})
+
+	t.Run("custom shard number", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg := litecache.NewDefaultConfig[float32]().WithShards(10)
+
+		c, err := litecache.NewWithConfig[float32](ctx, cfg)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		const iterations = 100_000
+
+		for i := 0; i < iterations; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				c.Set(fmt.Sprintf("key:%d", i), float32(i))
+			}(i)
+		}
+
+		wg.Wait()
+		assert.Equal(t, iterations, c.Count())
+
+		for i := 0; i < iterations; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				c.Set(fmt.Sprintf("key:%d", i), float32(i))
+			}(i)
+		}
+
+		wg.Wait()
+		assert.Equal(t, iterations, c.Count())
+
+		for i := 0; i < iterations; i++ {
+			v, found := c.Get(fmt.Sprintf("key:%d", i))
+			assert.True(t, found)
+			assert.Equal(t, float32(i), v)
+		}
 	})
 }
 
