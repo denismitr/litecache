@@ -228,6 +228,56 @@ func TestNewWithConfig(t *testing.T) {
 	})
 }
 
+func TestCache_SetExTtl(t *testing.T) {
+	t.Run("try set non existent key", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[float32](ctx)
+		assert.False(t, c.SetEx("non:existent:key", 34))
+
+		v, found := c.Get("non:existent:key")
+		assert.False(t, found)
+		assert.Equal(t, float32(0), v)
+	})
+
+	t.Run("try set non existent key with ttl", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[float32](ctx)
+		assert.False(t, c.SetExTtl("non:existent", 34, 1*time.Second))
+
+		v, found := c.Get("non:existent:key")
+		assert.False(t, found)
+		assert.Equal(t, float32(0), v)
+	})
+
+	t.Run("try set existing value with ttl", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[float32](ctx)
+		c.Set("existent:key", 34)
+
+		assert.True(t, c.SetExTtl("existent:key", 35, 1*time.Second))
+
+		{
+			v, found := c.Get("existent:key")
+			assert.True(t, found)
+			assert.Equal(t, float32(35), v)
+		}
+
+		time.Sleep(1 * time.Second)
+
+		{
+			v, found := c.Get("existent:key")
+			assert.False(t, found)
+			assert.Equal(t, float32(0), v)
+		}
+	})
+}
+
 func TestCache_ForEach(t *testing.T) {
 	t.Parallel()
 
