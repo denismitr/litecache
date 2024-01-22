@@ -138,6 +138,24 @@ func (c *Cache[T]) SetExTtl(key string, value T, ttl time.Duration) bool {
 	return false
 }
 
+func (c *Cache[T]) Remove(key string) bool {
+	s := c.getShard(key)
+	_, found := s.remove(key)
+	if found {
+		c.len.Add(-1)
+	}
+	return found
+}
+
+func (c *Cache[T]) GetAndRemove(key string) (T, bool) {
+	s := c.getShard(key)
+	v, found := s.remove(key)
+	if found {
+		c.len.Add(-1)
+	}
+	return v, found
+}
+
 // Count returns the number of in the cache keys.
 // It might get delayed updates when keys expire.
 func (c *Cache[T]) Count() int {

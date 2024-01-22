@@ -129,3 +129,21 @@ func (s *shard[T]) cleanExpired() int {
 	}
 	return deleted
 }
+
+func (s *shard[T]) remove(key string) (T, bool) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	itm, found := s.items[key]
+	if !found {
+		return zeroV[T](), false
+	}
+
+	now := time.Now().UnixNano()
+	if itm.exp > 0 && itm.exp > now {
+		return zeroV[T](), false
+	}
+
+	delete(s.items, key)
+	
+	return itm.value, true
+}

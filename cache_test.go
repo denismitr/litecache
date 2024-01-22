@@ -229,6 +229,8 @@ func TestNewWithConfig(t *testing.T) {
 }
 
 func TestCache_SetExTtl(t *testing.T) {
+	t.Parallel()
+
 	t.Run("try set non existent key", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -274,6 +276,98 @@ func TestCache_SetExTtl(t *testing.T) {
 			v, found := c.Get("existent:key")
 			assert.False(t, found)
 			assert.Equal(t, float32(0), v)
+		}
+	})
+}
+
+func TestCache_Remove(t *testing.T) {
+	t.Parallel()
+
+	t.Run("remove existing key", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		const N = 1_000_000
+
+		c := litecache.New[int](ctx)
+		for i := 1; i <= N; i++ {
+			c.SetNx(fmt.Sprintf("key:%d", i), i)
+		}
+
+		assert.Equal(t, N, c.Count())
+
+		totalFound := 0
+		res := make(map[string]int)
+		c.ForEach(func(k string, v int) {
+			totalFound++
+			res[k] = v
+		})
+		assert.Equal(t, N, totalFound)
+
+		for i := 1; i <= N; i++ {
+			v, ok := res[fmt.Sprintf("key:%d", i)]
+			assert.True(t, ok)
+			assert.Equal(t, i, v)
+		}
+
+		{
+			v, found := c.Get("key:10")
+			assert.True(t, found)
+			assert.Equal(t, 10, v)
+		}
+
+		assert.True(t, c.Remove("key:10"))
+
+		{
+			v, found := c.Get("key:10")
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+	})
+
+	t.Run("remove and get existing key", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		const N = 1_000_000
+
+		c := litecache.New[int](ctx)
+		for i := 1; i <= N; i++ {
+			c.SetNx(fmt.Sprintf("key:%d", i), i)
+		}
+
+		assert.Equal(t, N, c.Count())
+
+		totalFound := 0
+		res := make(map[string]int)
+		c.ForEach(func(k string, v int) {
+			totalFound++
+			res[k] = v
+		})
+		assert.Equal(t, N, totalFound)
+
+		for i := 1; i <= N; i++ {
+			v, ok := res[fmt.Sprintf("key:%d", i)]
+			assert.True(t, ok)
+			assert.Equal(t, i, v)
+		}
+
+		{
+			v, found := c.Get("key:10")
+			assert.True(t, found)
+			assert.Equal(t, 10, v)
+		}
+
+		{
+			v, found := c.GetAndRemove("key:10")
+			assert.True(t, found)
+			assert.Equal(t, 10, v)
+		}
+
+		{
+			v, found := c.Get("key:10")
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
 		}
 	})
 }
