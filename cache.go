@@ -138,6 +138,8 @@ func (c *Cache[T]) SetExTtl(key string, value T, ttl time.Duration) bool {
 	return false
 }
 
+// Remove - removes the value from cache if present
+// returns true if key was found and false if it was not
 func (c *Cache[T]) Remove(key string) bool {
 	s := c.getShard(key)
 	_, found := s.remove(key)
@@ -147,6 +149,8 @@ func (c *Cache[T]) Remove(key string) bool {
 	return found
 }
 
+// GetAndRemove - removes the value from cache if present
+// returns value and boolean true if key was found and zero value and boolean false if it was not
 func (c *Cache[T]) GetAndRemove(key string) (T, bool) {
 	s := c.getShard(key)
 	v, found := s.remove(key)
