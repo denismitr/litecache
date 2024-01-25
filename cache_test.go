@@ -372,6 +372,113 @@ func TestCache_Remove(t *testing.T) {
 	})
 }
 
+func TestCache_GetAndSetEx(t *testing.T) {
+	t.Parallel()
+
+	t.Run("get and replace", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx)
+		c.Set("foo", 3)
+		assert.Equal(t, 1, c.Count())
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 3, v)
+		}
+
+		{
+			v, found := c.GetAndSetEx("foo", 5)
+			assert.True(t, found)
+			assert.Equal(t, 3, v)
+		}
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 5, v)
+		}
+
+		{
+			v, found := c.GetAndSetEx("bar", 5)
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+	})
+
+	t.Run("get and replace with ttl", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx)
+		c.Set("foo", 3)
+		assert.Equal(t, 1, c.Count())
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 3, v)
+		}
+
+		{
+			v, found := c.GetAndSetExTtl("foo", 5, 100*time.Millisecond)
+			assert.True(t, found)
+			assert.Equal(t, 3, v)
+		}
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 5, v)
+		}
+
+		{
+			v, found := c.GetAndSetEx("bar", 5)
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+
+		time.Sleep(101 * time.Millisecond)
+
+		{
+			v, found := c.Get("foo")
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+	})
+
+	t.Run("get and replace expired value", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		c := litecache.New[int](ctx)
+		c.SetTtl("foo", 3, 200*time.Millisecond)
+		assert.Equal(t, 1, c.Count())
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 3, v)
+		}
+
+		time.Sleep(201 * time.Millisecond)
+
+		{
+			v, found := c.GetAndSetEx("foo", 5)
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+
+		{
+			v, found := c.Get("foo")
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+	})
+}
+
 func TestCache_ForEach(t *testing.T) {
 	t.Parallel()
 
@@ -515,6 +622,8 @@ func TestCache_ForEach(t *testing.T) {
 }
 
 func TestCache_Transform(t *testing.T) {
+	t.Parallel()
+
 	t.Run("transform single value", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

@@ -116,6 +116,26 @@ func (s *shard[T]) setEX(key string, value T, ttl time.Duration) bool {
 	return true
 }
 
+func (s *shard[T]) getSetEX(key string, value T, ttl time.Duration) (T, bool) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	itm, exists := s.items[key]
+	// if exists and expired return false
+	if !exists || (itm.exp > 0 && itm.exp < time.Now().UnixNano()) {
+		return zeroV[T](), false
+	}
+
+	exp := int64(NoExpiration)
+	if ttl > 0 {
+		exp = time.Now().UnixNano() + ttl.Nanoseconds()
+	}
+
+	oldValue := itm.value
+	s.items[key] = item[T]{value: value, exp: exp}
+	return oldValue, true
+}
+
 func (s *shard[T]) cleanExpired() int {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -144,6 +164,6 @@ func (s *shard[T]) remove(key string) (T, bool) {
 	}
 
 	delete(s.items, key)
-	
+
 	return itm.value, true
 }
