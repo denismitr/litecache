@@ -3,6 +3,7 @@ package litecache
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 var (
@@ -10,18 +11,25 @@ var (
 )
 
 type Config[T any] struct {
-	shards  int
-	onEvict func(key string, value T)
+	shards            int
+	ttlChecksInterval time.Duration
+	onEvict           func(key string, value T)
 }
 
 func NewDefaultConfig[T any]() Config[T] {
 	return Config[T]{
-		shards: 50,
+		shards:            50,
+		ttlChecksInterval: DefaultTtlCheckIntervals,
 	}
 }
 
 func (c Config[T]) WithShards(shards int) Config[T] {
 	c.shards = shards
+	return c
+}
+
+func (c Config[T]) WithTtlChecksInterval(interval time.Duration) Config[T] {
+	c.ttlChecksInterval = interval
 	return c
 }
 

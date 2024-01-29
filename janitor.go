@@ -17,7 +17,7 @@ func newJanitor[T any](ctx context.Context, runEvery time.Duration) *janitor[T] 
 	}
 }
 
-func (j *janitor[T]) runOn(s *shard[T], onAfterIteration func(evicted int)) {
+func (j *janitor[T]) runOn(s *shard[T], onAfterIteration func(key string, value T)) {
 	go func() {
 		tick := time.NewTicker(j.interval)
 
@@ -27,7 +27,7 @@ func (j *janitor[T]) runOn(s *shard[T], onAfterIteration func(evicted int)) {
 				tick.Stop()
 				return
 			case <-tick.C:
-				onAfterIteration(s.cleanExpired())
+				s.cleanExpired(onAfterIteration)
 			}
 		}
 	}()

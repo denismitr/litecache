@@ -14,6 +14,8 @@ import (
 )
 
 func TestDefaultCache(t *testing.T) {
+	t.Parallel()
+
 	t.Run("single set get", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -140,28 +142,48 @@ func TestDefaultCache(t *testing.T) {
 		defer cancel()
 
 		c := litecache.New[int](ctx)
-		c.SetTtl("foo", 10, 2*time.Second)
+		c.SetTtl("foo", 10, litecache.DefaultTtlCheckIntervals)
 		assert.Equal(t, 1, c.Count())
+		assert.Equal(t, 1, c.CountPrecise())
 
 		v, found := c.Get("foo")
 		assert.True(t, found)
 		assert.Equal(t, 10, v)
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(litecache.DefaultTtlCheckIntervals - 100*time.Millisecond)
 
-		v2, found := c.Get("foo")
-		assert.True(t, found)
-		assert.Equal(t, 10, v2)
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 10, v)
+		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(101 * time.Millisecond)
 
-		v3, found := c.Get("foo")
-		assert.False(t, found)
-		assert.Equal(t, 0, v3)
+		{
+			v, found := c.Get("foo")
+			assert.False(t, found)
+			assert.Equal(t, 0, v)
+		}
+
+		assert.Equal(t, 0, c.Count())
+		assert.Equal(t, 0, c.CountPrecise())
+
+		// reset the key foo
+		assert.True(t, c.SetNxTtl("foo", 25, 2*time.Second))
+
+		{
+			v, found := c.Get("foo")
+			assert.True(t, found)
+			assert.Equal(t, 25, v)
+			assert.Equal(t, 1, c.Count())
+		}
 	})
 }
 
 func TestNewWithConfig(t *testing.T) {
+	t.Parallel()
+
 	t.Run("0 shard number", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -225,6 +247,50 @@ func TestNewWithConfig(t *testing.T) {
 			assert.True(t, found)
 			assert.Equal(t, float32(i), v)
 		}
+	})
+
+	t.Run("with custom on evict func", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		copyToCache := litecache.New[float32](ctx)
+
+		cfg := litecache.NewDefaultConfig[float32]().
+			WithShards(10).
+			WithTtlChecksInterval(50 * time.Millisecond).
+			WithOnEvict(func(key string, value float32) {
+				copyToCache.Set(key, value)
+			})
+
+		originalCache, err := litecache.NewWithConfig[float32](ctx, cfg)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		const iterations = 100_000
+
+		for i := 0; i < iterations; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				originalCache.SetTtl(fmt.Sprintf("key:%d", i), float32(i), 75*time.Millisecond)
+			}(i)
+		}
+
+		time.Sleep(200 * time.Millisecond)
+
+		for i := 0; i < iterations; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				key := fmt.Sprintf("key:%d", i)
+				expectedValue := float32(i)
+				v, found := copyToCache.Get(key)
+				assert.True(t, found)
+				assert.Equal(t, expectedValue, v)
+			}(i)
+		}
+
+		wg.Wait()
 	})
 }
 

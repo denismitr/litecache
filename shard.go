@@ -136,14 +136,15 @@ func (s *shard[T]) getSetEX(key string, value T, ttl time.Duration) (T, bool) {
 	return oldValue, true
 }
 
-func (s *shard[T]) cleanExpired() int {
+func (s *shard[T]) cleanExpired(onEvict func(key string, value T)) int {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	deleted := 0
 	now := time.Now().UnixNano()
-	for k, item := range s.items {
-		if item.exp > 0 && item.exp < now {
+	for k, itm := range s.items {
+		if itm.exp > 0 && itm.exp < now {
 			delete(s.items, k)
+			onEvict(k, itm.value)
 			deleted++
 		}
 	}
@@ -166,4 +167,10 @@ func (s *shard[T]) remove(key string) (T, bool) {
 	delete(s.items, key)
 
 	return itm.value, true
+}
+
+func (s *shard[T]) countPrecise() int {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	return len(s.items)
 }

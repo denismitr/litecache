@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	NoExpiration time.Duration = -1
+	NoExpiration             time.Duration = -1
+	DefaultTtlCheckIntervals               = 300 * time.Millisecond
 )
 
 type Cache[T any] struct {
@@ -38,11 +39,14 @@ func newWithConfig[T any](ctx context.Context, cfg Config[T]) *Cache[T] {
 		hasher:    newDefaultHasher(),
 	}
 
-	j := newJanitor[T](ctx, 1*time.Second)
+	j := newJanitor[T](ctx, cfg.ttlChecksInterval)
 	for i := range c.shards {
 		c.shards[i] = newShard[T]()
-		j.runOn(c.shards[i], func(evicted int) {
-			c.len.Add(-int64(evicted))
+		j.runOn(c.shards[i], func(key string, value T) {
+			c.len.Add(-1)
+			if cfg.onEvict != nil {
+				cfg.onEvict(key, value)
+			}
 		})
 	}
 
@@ -66,11 +70,15 @@ func (c *Cache[T]) Get(key string) (T, bool) {
 	return item.value, true
 }
 
+// Transform can change the value of the given key atomically
+// it does not modify the ttl of the key
 func (c *Cache[T]) Transform(key string, effector func(value T) T) bool {
 	shard := c.getShard(key)
 	return shard.transform(key, effector)
 }
 
+// ForEach iterates over all the keys and values that are not expired in the cache
+// the method uses mutex to lock the content of the cache for reading
 func (c *Cache[T]) ForEach(fn func(k string, v T)) {
 	for _, s := range c.shards {
 		s.iterate(fn)
@@ -127,7 +135,7 @@ func (c *Cache[T]) SetEx(key string, value T) bool {
 }
 
 // SetExTtl - updates key value pair if key already exists and not expired in the cache.
-// ttl expected to be given as a last parameter.
+// ttl expiration is expected to be given as a last parameter.
 // if value was updated, returns true
 func (c *Cache[T]) SetExTtl(key string, value T, ttl time.Duration) bool {
 	shard := c.getShard(key)
@@ -138,11 +146,16 @@ func (c *Cache[T]) SetExTtl(key string, value T, ttl time.Duration) bool {
 	return false
 }
 
+// GetAndSetExTtl sets the value for existing key, only if it exists in the cache
+// it will return the old value and true if the key found in cache and zero value and false if not found or expired
+// ttl expiration is expected to be given as a last parameter.
 func (c *Cache[T]) GetAndSetExTtl(key string, value T, ttl time.Duration) (T, bool) {
 	shard := c.getShard(key)
 	return shard.getSetEX(key, value, ttl)
 }
 
+// GetAndSetEx sets the value for existing key, only if it exists in the cache
+// it will return the old value and true if the key found in cache and zero value and false if not found or expired
 func (c *Cache[T]) GetAndSetEx(key string, value T) (T, bool) {
 	shard := c.getShard(key)
 	return shard.getSetEX(key, value, NoExpiration)
@@ -174,6 +187,14 @@ func (c *Cache[T]) GetAndRemove(key string) (T, bool) {
 // It might get delayed updates when keys expire.
 func (c *Cache[T]) Count() int {
 	return int(c.len.Load())
+}
+
+func (c *Cache[T]) CountPrecise() int {
+	var total int
+	for _, s := range c.shards {
+		total += s.countPrecise()
+	}
+	return total
 }
 
 func zeroV[T any]() T {
